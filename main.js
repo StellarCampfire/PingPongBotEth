@@ -15,13 +15,17 @@ const contract = new Contract(contractAddress, contractABI, wallet);
 // TODO startblock loading
 const startBlock = 7968746;
 
+async function sendPong(event){
+  console.log("PONG: Fake sending pong.")
+}
+
 
 async function catchMissedEventsFromTo(startBlockNumber, endBlockNumber){
     if (endBlockNumber > startBlockNumber){
         const events = await contract.queryFilter('Ping', startBlockNumber + 1, endBlockNumber);
         for (const event of events) {
-            // TODO send pong
-            console.log(`Finded missed ping event on block ${event.blockNumber}`)
+            console.log(`Finded missed ping event on block ${event.blockNumber}`);
+            await sendPong(event);
         }
     }
 }
@@ -32,8 +36,8 @@ async function startBotFromBlock(blockNumber) {
     // Listen for Ping events
     contract.on('Ping', async (event) => {
       if (event.blockNumber > startBotBlock) {
-        // TODO send pong
         console.log(`Catching new Ping event on block: ${event.blockNumber}`)
+        await sendPong(event);
       }
     });
     
