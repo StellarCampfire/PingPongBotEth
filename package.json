@@ -2,7 +2,7 @@
   "name": "pingpongbot",
   "version": "1.0.0",
   "main": "main.js",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,6 +12,13 @@
   "description": "",
   "dependencies": {
     "dotenv": "^16.4.7",
-    "ethers": "^6.13.5"
+    "ethers": "^6.13.5",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/dotenv": "^6.1.1",
+    "@types/node": "^22.13.13",
+    "@types/winston": "^2.4.4",
+    "typescript": "^5.8.2"
   }
 }
