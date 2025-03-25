@@ -3,13 +3,13 @@ import { Contract, JsonRpcProvider, Wallet, EventLog } from 'ethers';
 import * as fs from 'fs';
 import * as winston from 'winston';
 
+
+// Names for queues
 const COMMON_PING_EVENT_QUEUE: string = 'Common_Ping_Event_Queue';
 const FORCE_PING_EVENT_QUEUE: string = 'Force_Ping_Event_Queue';
 
-interface State {
-    lastBlock: number;
-}
-
+// --------------------------- Configuration ----------------------- 
+// just in file for now for simplier
 class Configuration {
     private readonly _providerUrl: string;
     private readonly _contractAddress: string;
@@ -58,7 +58,8 @@ class Configuration {
     }
 }
 
-
+// -------------------------------- QUEUE ----------------------
+// queue with lock oportunity
 class Queue<T extends EventLog> {
     queueName: string;
     queue: T[];
@@ -68,6 +69,7 @@ class Queue<T extends EventLog> {
     constructor(queueName: string, gasModifier: number) {
         this.queueName = queueName;
         this.queue = [];
+        // it depens of queue level, if transaction return with error, we try to send it with more gas
         this.gasModifier = gasModifier;
         this.lock = false;
     }
@@ -104,15 +106,16 @@ interface State {
 interface IBotStateManager {
     getLastBlock(): number;
     setLastBlock(blockNumber: number): void;
-
-    addSentTransaction(pingTxHash: string, blockNumber: number): void;
-    addFailedTransaction(pingTxHash: string, blockNumber: number): void;
     
+    addSentTransaction(pingTxHash: string, blockNumber: number): void
     getSentTransactions(): { [txHash: string]: { blockNumber: number; } }
-    
     clearTransactionsBeforeBlock(blockNumber: number): void;
+
+    // The error transaction will saved in state after serveral tryes to send. We can't handle them in this realization, but we will not lose them.
+    addFailedTransaction(pingTxHash: string, blockNumber: number): void;
 }
 
+// State manager based on fs system, you can use IBotStateManager implementation to add anoter StateManagers
 class BotStateManagerFS implements IBotStateManager {
     private readonly _stateFile: string;
     private _lastBlock: number;
@@ -181,7 +184,7 @@ class BotStateManagerFS implements IBotStateManager {
     }
 }
 
-
+// -------------------------------- BOT --------------------------
 class Bot{
     provider : JsonRpcProvider;
     wallet : Wallet;
@@ -214,6 +217,7 @@ class Bot{
         const currentBlock = await this.provider.getBlockNumber();
         logger.info(`Bot started with address ${this.wallet.address}, listening for Pings from block ${currentBlock}`);
 
+        // start listening contract for ping
         this.contract.on('Ping', async (event: EventLog) => {
             if (event.blockNumber > currentBlock) {
                 logger.info(`Catching new Ping event on block: ${event.blockNumber}`);
@@ -221,10 +225,14 @@ class Bot{
             }
         });
 
+        // find missed events befor block bot listening
         await this.catchMissedEventsFromTo(lastBlock, currentBlock);
 
+        // handle two queues, first (common) is for first trying send pong, second (force) for second try with more gas
         setInterval(() => this.queueHandle(this.eventQueue), 5000); // handle queue every 5s
-        setInterval(() => this.queueHandle(this.forceEventQueue), 5000); // handle queue every 5s with no save state
+        setInterval(() => this.queueHandle(this.forceEventQueue), 5000); // handle queue every 5s 
+
+        // it move bot state to the forward block, and handle all missed ping events, for case if socket connection fails
         setInterval(async () => {
             const lastBlock = this.botStateManager.getLastBlock();
             const currentBlock = await this.provider.getBlockNumber();
@@ -232,6 +240,7 @@ class Bot{
         }, 60000); // check missing events every minute and move last block.
     }
 
+    // Need queue make locked before work for not invoked with anoter function alerts
     async queueHandle(queue: Queue<EventLog>): Promise<void> {
         if (queue.lock) return;
     
@@ -254,6 +263,7 @@ class Bot{
         }
     }
 
+    // Deside what to do with error try to send pong
     async handleErrorPong(event: EventLog, queue: Queue<EventLog>){
         switch (queue.queueName) {
             // If transaction failed move event in force queue to try to send it with more gas
@@ -266,7 +276,7 @@ class Bot{
         }
     }
 
-
+    // It send pong, but not change last block in state, because we caan be hure that all is ok only after catchMissedEventsFromTo
     async sendPong(event: EventLog, gasLimit: number): Promise<void> {
         const txHash = event.transactionHash;
         const blockNumber = event.blockNumber;
@@ -286,6 +296,7 @@ class Bot{
         }
     }
 
+    // found missed events, load them in queues and move block next
     async catchMissedEventsFromTo(startBlockNumber: number, endBlockNumber: number): Promise<void> {
         if (endBlockNumber > startBlockNumber) {
             logger.info(`Checking missed events from ${startBlockNumber + 1} to ${endBlockNumber}`);
@@ -328,7 +339,7 @@ const stateManger = new BotStateManagerFS(configuration);
 const bot = new Bot(
     configuration,
     new Queue(COMMON_PING_EVENT_QUEUE, 1),
-    new Queue(FORCE_PING_EVENT_QUEUE, 2),
+    new Queue(FORCE_PING_EVENT_QUEUE, 2), // force queue with double gas modifier
     stateManger
 );
 
