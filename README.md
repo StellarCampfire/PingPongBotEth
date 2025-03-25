@@ -19,7 +19,7 @@ A TypeScript-based bot designed to interact with a smart contract on the Sepolia
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/StellarCampfire/PingPongBotEth.git
-   cd PingPongBot
+   cd PingPongBotEth
    ```
 
 2. **Install dependencies**:
